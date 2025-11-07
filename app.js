@@ -1,18 +1,17 @@
-// ===========================
-// app.js
-// ===========================
+require("./src/v1/config/env");
+
+const path = require("path");
 const express = require("express");
 const cors = require("cors");
-const bodyParser = require("body-parser");
-const fs = require("fs");
-const dotenv = require("dotenv");
-const path = require("path");
+const helmet = require("helmet");
+const compression = require("compression");
+const rateLimit = require("express-rate-limit");
+const pinoHttp = require("pino-http");
+
 const faqRoutes = require("./src/v1/route/faq");
 const termsRoutes = require("./src/v1/route/terms");
 const privacyRoutes = require("./src/v1/route/privacy");
-
 const categoryRoutes = require("./src/v1/route/categoryList");
-
 const ratingRoutes = require("./src/v1/route/rating");
 const locationRoutes = require("./src/v1/route/location");
 const paymentRoutes = require("./src/v1/route/paymentRoute");
@@ -22,11 +21,9 @@ const bannerListRoutes = require("./src/v1/route/bannerList");
 const homeScreenbannerRoutes = require("./src/v1/route/homeScreenBanner");
 const productStyleRoutes = require("./src/v1/route/productStyleRoutes");
 const mainCategoryRoutes = require("./src/v1/route/mainCategoryRoute");
-
 const otpRoutes = require("./src/v1/route/otpRoute");
 const userRoutes = require("./src/v1/route/user");
 const cartRoute = require("./src/v1/route/cartRoute");
-
 const addressRoute = require("./src/v1/route/addressRoute");
 const grabEssentialsRoute = require("./src/v1/route/grabEssentialsRoute");
 const addressDataRoutes = require("./src/v1/route/addressDataRoute");
@@ -37,64 +34,92 @@ const grabEssentialRoute = require("./src/v1/route/grabEssentialProductRoute");
 const orderRoute = require("./src/v1/route/orderList");
 const homeCategoryRoute = require("./src/v1/route/homeCategoryRoutes");
 const homeScreenProductRoute = require("./src/v1/route/homeScreenProductRoutes");
-// Load environment variables
-dotenv.config({ path: __dirname + "/.env" });
+
+const { appConfig } = require("./src/v1/config/appConfig");
+const logger = require("./src/v1/config/logger");
+const { notFoundHandler } = require("./src/v1/middleware/notFound");
+const { errorHandler } = require("./src/v1/middleware/errorHandler");
+const { requestContext } = require("./src/v1/middleware/requestContext");
+const { success } = require("./src/v1/utils/apiResponse");
 
 const app = express();
 
-// Setup view engine
+app.disable("x-powered-by");
+app.set("trust proxy", 1);
+
 app.set("view engine", "ejs");
-app.set("views", path.join(__dirname, "views"));
+app.set("views", path.join(__dirname, "src/v1/view"));
 
-// Static files
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "public")));
+app.use(requestContext);
 
-// Middleware
+app.use(
+  pinoHttp({
+    logger,
+    genReqId: (req) => req.id,
+    autoLogging: {
+      ignore: (req) => req.url === "/health" || req.url === "/readyz"
+    }
+  })
+);
+
 app.use(
   cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: [
-      "DNT",
-      "User-Agent",
-      "X-Requested-With",
-      "If-Modified-Since",
-      "Cache-Control",
-      "Content-Type",
-      "Range",
-      "Authorization"
-    ],
-    exposedHeaders: ["Content-Length", "Content-Range"],
+    origin: appConfig.cors.origin,
+    methods: appConfig.cors.methods,
+    allowedHeaders: appConfig.cors.allowedHeaders,
+    exposedHeaders: appConfig.cors.exposedHeaders,
+    credentials: appConfig.cors.origin !== "*",
     maxAge: 1728000
   })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  })
+);
+app.use(compression());
 
-app.use((req, res, next) => {
-  if (["POST", "PUT", "PATCH"].includes(req.method)) {
-    bodyParser.json()(req, res, next);
-  } else {
-    next();
-  }
+app.use(
+  express.json({
+    limit: appConfig.bodyLimit
+  })
+);
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: appConfig.bodyLimit
+  })
+);
+
+const apiLimiter = rateLimit({
+  ...appConfig.rateLimit,
+  message: {
+    success: false,
+    message: "Too many requests, please slow down."
+  },
+  handler: (req, res) =>
+    res.status(429).json({
+      success: false,
+      message:
+        "Too many requests from this IP, please try again after some time."
+    })
 });
 
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
-  res.header(
-    "Access-Control-Allow-Headers",
-    "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range"
-  );
-  res.header("Access-Control-Expose-Headers", "Content-Length,Content-Range");
-  res.header("Access-Control-Max-Age", "1728000");
-  next();
+app.use("/v1", apiLimiter);
+
+app.get("/health", (req, res) => {
+  success(res, {
+    message: "Selorg API is healthy",
+    data: {
+      uptime: process.uptime(),
+      nodeEnv: appConfig.nodeEnv,
+      timestamp: Date.now()
+    }
+  });
 });
 
-// Use routes
 app.use("/v1/faqs", faqRoutes);
 app.use("/v1/terms", termsRoutes);
 app.use("/v1/privacy", privacyRoutes);
@@ -108,12 +133,10 @@ app.use("/v1/bannerslist", bannerListRoutes);
 app.use("/v1/homeScreenBanner", homeScreenbannerRoutes);
 app.use("/v1/productStyle", productStyleRoutes);
 app.use("/v1/mainCategory", mainCategoryRoutes);
-
 app.use("/v1/otp", otpRoutes);
 app.use("/v1/users", userRoutes);
 app.use("/v1/carts", cartRoute);
 app.use("/v1/orders", orderRoute);
-
 app.use("/v1/addresses", addressRoute);
 app.use("/v1/grabEssentials", grabEssentialsRoute);
 app.use("/v1/addressData", addressDataRoutes);
@@ -124,27 +147,7 @@ app.use("/v1/grabEssentialProduct", grabEssentialRoute);
 app.use("/v1/homeCategory", homeCategoryRoute);
 app.use("/v1/homeProduct", homeScreenProductRoute);
 
-
-// Custom 404 middleware
-app.use((req, res, next) => {
-  res.status(404).json({ message: "No such route exists" });
-});
-
-// Error handler
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(err.status || 500).json({ message: "Internal Server Error" });
-});
-
-const mongoose = require("mongoose");
-mongoose.set("strictQuery", false);
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-  .then(() => console.log("Mongo connected to:", process.env.MONGO_URI))
-  .catch((error) => console.error(error));
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 module.exports = app;
-
-
