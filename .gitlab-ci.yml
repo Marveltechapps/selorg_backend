@@ -1,0 +1,34 @@
+image: docker:latest  # Use Docker image with CLI
+
+stages:
+  - build
+  - push
+  - deploy
+
+before_script:
+  - docker info  # Verify Docker works
+
+build:
+  stage: build
+  script:
+    - docker build -t marvelgroups/selorg:latest .
+
+push:
+  stage: push
+  script:
+    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    - docker push marvelgroups/selorg:latest
+  only:
+    - main
+
+deploy:
+  stage: deploy
+  script:
+    - ssh -o StrictHostKeyChecking=no root@43.204.144.74 <<EOF
+        docker stop selorg || true
+        docker rm selorg || true
+        docker pull marvelgroups/selorg:latest
+        docker run -d --name selorg -p 3000:3000 marvelgroups/selorg:latest
+      EOF
+  only:
+    - main
