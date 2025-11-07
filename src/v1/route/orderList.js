@@ -4,13 +4,17 @@ const orderController = require("../controller/orderController");
 const authenticateToken = require("../auths/authenticationToken"); // ✅ Import token middleware
 
 // ✅ Secure all routes using authenticateToken
+router.post("/", authenticateToken, orderController.createOrder);
 router.post("/create", authenticateToken, orderController.createOrder);
 
 router.get("/list", authenticateToken, orderController.getOrders);
+router.get("/mine", authenticateToken, orderController.getOrderByUserId);
 
-router.get("/:id", authenticateToken, orderController.getOrderById);
-
-router.get("/by-user/:id", authenticateToken, orderController.getOrderByUserId);
+router.post(
+  "/:orderId/reorder",
+  authenticateToken,
+  orderController.reorder
+);
 
 router.patch(
   "/:id/status",
@@ -19,7 +23,6 @@ router.patch(
 );
 
 router.delete("/:id", authenticateToken, orderController.deleteOrder);
-
-router.post("/reorder/:orderId", authenticateToken, orderController.reorder);
+router.get("/:id", authenticateToken, orderController.getOrderById);
 
 module.exports = router;
