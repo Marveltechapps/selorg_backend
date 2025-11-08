@@ -4,6 +4,10 @@ const UserModel = require("../model/userModel");
 exports.createUser = async (req, res) => {
   try {
     const user = new UserModel(req.body);
+    user.lastActiveAt = new Date();
+    if (user.isVerified && !user.mobileVerifiedAt) {
+      user.mobileVerifiedAt = new Date();
+    }
     await user.save();
     res.status(201).json(user);
   } catch (error) {
@@ -36,7 +40,7 @@ exports.getUserById = async (req, res) => {
 
 // ✅ Update Profile – authenticated
 exports.updateProfile = async (req, res) => {
-  const { name, email } = req.body;
+  const { name, email, notificationPreferences } = req.body;
   const mobileNumber = req.user.mobileNumber;
 
   try {
@@ -48,6 +52,17 @@ exports.updateProfile = async (req, res) => {
 
     user.name = name || user.name;
     user.email = email || user.email;
+    if (notificationPreferences) {
+      const currentPrefs =
+        user.notificationPreferences?.toObject?.() ||
+        user.notificationPreferences ||
+        {};
+      user.notificationPreferences = {
+        ...currentPrefs,
+        ...notificationPreferences
+      };
+    }
+    user.lastActiveAt = new Date();
     await user.save();
 
     res.status(200).json({ message: "Profile updated successfully", user });
