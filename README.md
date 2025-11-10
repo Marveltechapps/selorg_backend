@@ -91,8 +91,3 @@ src/
 - Run `npm run dev` and hit `GET /health` to confirm readiness.
 - Populate MongoDB with seed data (coming soon).
 - Extend automated tests to cover the richer order lifecycle and loyalty flows.
-
-## Maintainers
-
-- Author: **Gunaseelan M** – cloudguna@gmail.com  
-- Current refactor lead: **Cursor AI Assistant (GPT-5 Codex)**

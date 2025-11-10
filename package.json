@@ -9,18 +9,8 @@
     "start:prod": "node server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://mgunaKarthick@bitbucket.org/mgunaKarthick/sel.git"
-  },
   "keywords": [],
-  "author": "Guna",
-  "email": "cloudguna@gmail.com",
   "license": "ISC",
-  "bugs": {
-    "url": "https://bitbucket.org/mgunaKarthick/sel/issues"
-  },
-  "homepage": "https://bitbucket.org/mgunaKarthick/sel#readme",
   "dependencies": {
     "@googlemaps/google-maps-services-js": "^3.4.0",
     "axios": "^1.5.1",
