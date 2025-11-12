@@ -7,11 +7,14 @@ const cartItemSchema = new mongoose.Schema({
     ref: "ProductStyle",
     required: true
   },
+  variantId: { type: mongoose.Schema.Types.ObjectId }, // ID of the specific variant
   quantity: { type: Number, required: true, min: 1 },
-  variantLabel: { type: String, required: true },
+  variantLabel: { type: String, required: true }, // e.g., "500g", "1kg", "6 pieces"
   imageURL: String,
   price: { type: Number, required: true },
-  discountPrice: { type: Number }
+  discountPrice: { type: Number },
+  addedAt: { type: Date, default: Date.now },
+  savedForLater: { type: Boolean, default: false }
 });
 
 const billSummarySchema = new mongoose.Schema(
@@ -29,6 +32,18 @@ const billSummarySchema = new mongoose.Schema(
   { _id: false }
 );
 
+const deliveryInstructionsSchema = new mongoose.Schema(
+  {
+    noContactDelivery: { type: Boolean, default: false },
+    dontRingBell: { type: Boolean, default: false },
+    petAtHome: { type: Boolean, default: false },
+    leaveAtDoor: { type: Boolean, default: false },
+    callUponArrival: { type: Boolean, default: false },
+    additionalNotes: { type: String, trim: true }
+  },
+  { _id: false }
+);
+
 const cartSchema = new mongoose.Schema(
   {
     userId: {
@@ -39,9 +54,18 @@ const cartSchema = new mongoose.Schema(
       unique: true
     },
     items: [cartItemSchema],
-    deliveryInstructions: String,
-    addNotes: String,
-    billSummary: { type: billSummarySchema, default: () => ({}) }
+    savedForLaterItems: [cartItemSchema],
+    deliveryInstructions: {
+      type: deliveryInstructionsSchema,
+      default: () => ({})
+    },
+    billSummary: { type: billSummarySchema, default: () => ({}) },
+    expiresAt: { 
+      type: Date, 
+      default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      index: true
+    },
+    lastActivityAt: { type: Date, default: Date.now }
   },
   { timestamps: true }
 );

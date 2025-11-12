@@ -1,202 +1,188 @@
-const AddressModel = require("../model/addressModel");
+const addressService = require("../service/addressService");
+const { success, failure } = require("../utils/apiResponse");
 
-// Create a new address
+/**
+ * Create a new address
+ */
 exports.createAddress = async (req, res) => {
   try {
-    const userId = req.user.userId; // ✅ Get from JWT
-    const { label, details, coordinates, isDefault } = req.body;
-
-    if (isDefault) {
-      await AddressModel.updateMany(
-        { userId, isDefault: true },
-        { $set: { isDefault: false } }
-      );
+    const address = await addressService.createAddress(req.user.userId, req.body);
+    
+    // Set as default if requested
+    if (req.body.isDefault) {
+      await addressService.setDefaultAddress(address._id.toString(), req.user.userId);
     }
 
-    const newAddress = new AddressModel({
-      userId,
-      label,
-      details,
-      coordinates,
-      isDefault
-    });
-    const savedAddress = await newAddress.save();
-
-    res.status(201).json({
-      success: true,
+    return success(res, {
+      statusCode: 201,
       message: "Address created successfully",
-      data: savedAddress
+      data: address
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return failure(res, {
+      statusCode: error.statusCode || 500,
+      message: error.message || "Failed to create address"
+    });
   }
 };
 
-// Get all addresses for the logged-in user
+/**
+ * Get all addresses for the logged-in user
+ */
 exports.getAddresses = async (req, res) => {
   try {
-    const userId = req.user.userId; // ✅ Secure source
-    const addresses = await AddressModel.find({ userId }).sort({
-      isDefault: -1,
-      updatedAt: -1
+    const addresses = await addressService.getUserAddresses(req.user.userId);
+    
+    return success(res, {
+      message: "Addresses retrieved successfully",
+      data: addresses
     });
-    res.status(200).json({ success: true, data: addresses });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return failure(res, {
+      statusCode: error.statusCode || 500,
+      message: error.message || "Failed to retrieve addresses"
+    });
   }
 };
 
-// Get a single address by ID
+/**
+ * Get a single address by ID
+ */
 exports.getAddressById = async (req, res) => {
   try {
-    const { id } = req.params;
-    const address = await AddressModel.findById(id);
-
-    if (!address) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Address not found" });
-    }
-
-    // ✅ Optional: check if it belongs to the logged-in user
-    if (address.userId.toString() !== req.user.userId) {
-      return res.status(403).json({ success: false, message: "Access denied" });
-    }
-
-    res.status(200).json({ success: true, data: address });
+    const address = await addressService.getAddressById(req.params.id, req.user.userId);
+    
+    return success(res, {
+      message: "Address retrieved successfully",
+      data: address
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return failure(res, {
+      statusCode: error.statusCode || 500,
+      message: error.message || "Failed to retrieve address"
+    });
   }
 };
 
-// Get addresses for the logged-in user using token
+/**
+ * Get addresses for the logged-in user
+ */
 exports.getByUserId = async (req, res) => {
   try {
-    const userId = req.user.userId; // ✅ Extracted securely from token
-
-    const addresses = await AddressModel.find({ userId }).sort({
-      isDefault: -1,
-      updatedAt: -1
-    });
-
+    const addresses = await addressService.getUserAddresses(req.user.userId);
+    
     if (!addresses.length) {
-      return res.status(404).json({
-        success: false,
+      return failure(res, {
+        statusCode: 404,
         message: "No addresses found for this user"
       });
     }
 
-    res.status(200).json({
-      success: true,
+    return success(res, {
       message: "Addresses fetched successfully",
       data: addresses
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error retrieving addresses",
-      error: error.message
+    return failure(res, {
+      statusCode: error.statusCode || 500,
+      message: error.message || "Failed to retrieve addresses"
     });
   }
 };
 
-// Set an address as default
+/**
+ * Set an address as default
+ */
 exports.setDefaultAddress = async (req, res) => {
-  const userId = req.user.userId;
-  const { addressId } = req.body;
-
   try {
-    const address = await AddressModel.findOne({ _id: addressId, userId });
-    if (!address) {
-      return res
-        .status(404)
-        .json({ message: "Address not found or does not belong to this user" });
+    const { addressId } = req.body;
+    
+    if (!addressId) {
+      return failure(res, {
+        statusCode: 400,
+        message: "Address ID is required"
+      });
     }
 
-    await AddressModel.updateMany({ userId }, { $set: { isDefault: false } });
-    const updatedAddress = await AddressModel.findByIdAndUpdate(
-      addressId,
-      { isDefault: true },
-      { new: true }
-    );
-
-    res.status(200).json({
+    const address = await addressService.setDefaultAddress(addressId, req.user.userId);
+    
+    return success(res, {
       message: "Default address set successfully",
-      data: updatedAddress
+      data: address
     });
   } catch (error) {
-    res.status(500).json({
-      message: "Error setting default address",
-      error: error.message
+    return failure(res, {
+      statusCode: error.statusCode || 500,
+      message: error.message || "Failed to set default address"
     });
   }
 };
 
-// Update an address
+/**
+ * Update an address
+ */
 exports.updateAddress = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { label, details, coordinates, isDefault } = req.body;
+    const address = await addressService.updateAddress(
+      req.params.id,
+      req.user.userId,
+      req.body
+    );
 
-    const address = await AddressModel.findById(id);
-
-    if (!address) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Address not found" });
-    }
-
-    if (address.userId.toString() !== req.user.userId) {
-      return res.status(403).json({ success: false, message: "Access denied" });
-    }
-
-    if (isDefault) {
-      await AddressModel.updateMany(
-        { userId: req.user.userId },
-        { $set: { isDefault: false } }
-      );
-    }
-
-    address.label = label ?? address.label;
-    address.details = details ?? address.details;
-    address.coordinates = coordinates ?? address.coordinates;
-    address.isDefault = isDefault ?? address.isDefault;
-    address.updatedAt = new Date();
-
-    const updatedAddress = await address.save();
-
-    res.status(200).json({
-      success: true,
+    return success(res, {
       message: "Address updated successfully",
-      data: updatedAddress
+      data: address
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return failure(res, {
+      statusCode: error.statusCode || 500,
+      message: error.message || "Failed to update address"
+    });
   }
 };
 
-// Delete an address
+/**
+ * Delete an address
+ */
 exports.deleteAddress = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    const address = await AddressModel.findById(id);
-    if (!address) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Address not found" });
-    }
-
-    if (address.userId.toString() !== req.user.userId) {
-      return res.status(403).json({ success: false, message: "Access denied" });
-    }
-
-    await AddressModel.findByIdAndDelete(id);
-
-    res
-      .status(200)
-      .json({ success: true, message: "Address deleted successfully" });
+    const result = await addressService.deleteAddress(req.params.id, req.user.userId);
+    
+    return success(res, {
+      message: result.message
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return failure(res, {
+      statusCode: error.statusCode || 500,
+      message: error.message || "Failed to delete address"
+    });
+  }
+};
+
+/**
+ * Check delivery availability for zipcode
+ */
+exports.checkDeliveryAvailability = async (req, res) => {
+  try {
+    const { zipCode } = req.body;
+    
+    if (!zipCode) {
+      return failure(res, {
+        statusCode: 400,
+        message: "Zip code is required"
+      });
+    }
+
+    const result = await addressService.checkDeliveryAvailability(zipCode);
+    
+    return success(res, {
+      message: "Delivery availability checked",
+      data: result
+    });
+  } catch (error) {
+    return failure(res, {
+      statusCode: error.statusCode || 500,
+      message: error.message || "Failed to check delivery availability"
+    });
   }
 };

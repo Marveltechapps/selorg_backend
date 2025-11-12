@@ -6,9 +6,18 @@ const app = require("./app");
 const { appConfig } = require("./src/v1/config/appConfig");
 const logger = require("./src/v1/config/logger");
 const { connectMongo } = require("./src/v1/config/database");
+const { validateEnv } = require("./src/v1/config/validateEnv");
+const { logSecurityCheck } = require("./src/v1/config/security");
+const websocketService = require("./src/v1/service/websocketService");
 
 const startServer = async () => {
   try {
+    // Validate environment variables before starting
+    validateEnv();
+    
+    // Check security configuration
+    logSecurityCheck();
+    
     await connectMongo();
 
     const httpServer = http.createServer(app);
@@ -20,6 +29,10 @@ const startServer = async () => {
         "HTTP server listening"
       );
     });
+
+    // Initialize WebSocket for real-time order tracking
+    websocketService.initialize(httpServer);
+    logger.info("WebSocket service initialized for real-time tracking");
 
     if (appConfig.ssl.enabled) {
       try {
@@ -50,6 +63,11 @@ const startServer = async () => {
 
     const gracefulShutdown = (signal) => {
       logger.info({ signal }, "Received shutdown signal");
+      
+      // Close WebSocket connections first
+      logger.info("Closing WebSocket connections...");
+      websocketService.closeAll();
+      
       const shutdownTasks = [];
 
       shutdownTasks.push(
@@ -72,7 +90,10 @@ const startServer = async () => {
         );
       }
 
-      Promise.allSettled(shutdownTasks).finally(() => process.exit(0));
+      Promise.allSettled(shutdownTasks).finally(() => {
+        logger.info("Graceful shutdown complete");
+        process.exit(0);
+      });
     };
 
     process.on("SIGTERM", gracefulShutdown);

@@ -135,11 +135,39 @@ const fulfillmentSchema = new mongoose.Schema(
       end: { type: Date }
     },
     eta: { type: Date },
+    estimatedMinutes: { type: Number }, // E.g., "Arriving in 15 mins"
     partnerId: { type: String },
     riderDetails: {
       name: { type: String },
-      phone: { type: String }
-    }
+      phone: { type: String },
+      vehicleNumber: { type: String },
+      vehicleType: { type: String, enum: ["bike", "scooter", "van", "cycle"], default: "bike" },
+      rating: { type: Number, min: 0, max: 5 }
+    },
+    // Real-time tracking
+    tracking: {
+      currentLocation: {
+        latitude: { type: Number },
+        longitude: { type: Number },
+        updatedAt: { type: Date }
+      },
+      destinationLocation: {
+        latitude: { type: Number },
+        longitude: { type: Number }
+      },
+      route: [{
+        latitude: { type: Number },
+        longitude: { type: Number },
+        timestamp: { type: Date }
+      }],
+      distanceRemaining: { type: Number }, // in meters
+      isLive: { type: Boolean, default: false } // Is partner actively being tracked?
+    },
+    // Timestamps
+    assignedAt: { type: Date },
+    pickedUpAt: { type: Date },
+    dispatchedAt: { type: Date },
+    deliveredAt: { type: Date }
   },
   { _id: false }
 );
@@ -170,6 +198,18 @@ const couponSchema = new mongoose.Schema(
     code: { type: String },
     savings: { type: Number, default: 0 },
     metadata: mongoose.Schema.Types.Mixed
+  },
+  { _id: false }
+);
+
+const deliveryInstructionsSchema = new mongoose.Schema(
+  {
+    noContactDelivery: { type: Boolean, default: false },
+    dontRingBell: { type: Boolean, default: false },
+    petAtHome: { type: Boolean, default: false },
+    leaveAtDoor: { type: Boolean, default: false },
+    callUponArrival: { type: Boolean, default: false },
+    additionalNotes: { type: String, trim: true }
   },
   { _id: false }
 );
@@ -235,8 +275,10 @@ const orderSchema = new mongoose.Schema(
       required: true
     },
     deliveryTip: { type: Number, default: 0 },
-    deliveryInstructions: { type: String, default: "" },
-    additionalNote: { type: String, default: "" },
+    deliveryInstructions: {
+      type: deliveryInstructionsSchema,
+      default: () => ({})
+    },
     timeline: {
       type: [timelineSchema],
       default: () => []

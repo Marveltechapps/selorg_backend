@@ -2,9 +2,18 @@ const mongoose = require("mongoose");
 
 const notificationPreferencesSchema = new mongoose.Schema(
   {
+    // Channel preferences
+    push: { type: Boolean, default: true },
+    sms: { type: Boolean, default: true },
+    email: { type: Boolean, default: true },
+    whatsapp: { type: Boolean, default: false }, // Opt-in required for WhatsApp
+    
+    // Content preferences
     orderUpdates: { type: Boolean, default: true },
     marketing: { type: Boolean, default: false },
-    appUpdates: { type: Boolean, default: true }
+    appUpdates: { type: Boolean, default: true },
+    promotions: { type: Boolean, default: false },
+    newsletter: { type: Boolean, default: false }
   },
   { _id: false }
 );
@@ -41,6 +50,9 @@ const userSchema = new mongoose.Schema(
       trim: true,
       index: true,
       sparse: true
+    },
+    avatar: {
+      type: String
     },
     otp: { type: String },
     otpExpiresAt: { type: Date },
